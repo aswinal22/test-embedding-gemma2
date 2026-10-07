@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*-checkpoint.ipynb
+
+# Model Weights, Hub & Caches
+*.bin
+*.pt
+*.pth
+*.safetensors
+*.onnx
+.cache/
+hf_cache/
+huggingface/
+
+# Environment Variables & IDE
+.env
+.env.local
+.vscode/
+.idea/
+
+# OS Specific
+.DS_Store
+Thumbs.db

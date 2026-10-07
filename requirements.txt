@@ -1,0 +1,12 @@
+# Core Deep Learning & Embeddings
+sentence-transformers>=6.1.0
+transformers>=4.49.0
+accelerate>=0.28.0
+
+# Numerical & Image Processing
+torch
+numpy
+pillow
+
+# Benchmarking & Display
+tabulate
