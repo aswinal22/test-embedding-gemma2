@@ -74,7 +74,8 @@ def main():
     model = SentenceTransformer(
         model_id,
         device=device,
-        model_kwargs=model_kwargs
+        model_kwargs=model_kwargs,
+        trust_remote_code=True
     )
 
     candidate_texts = [

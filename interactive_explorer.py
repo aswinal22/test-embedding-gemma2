@@ -71,6 +71,7 @@ def main():
         "google/embeddinggemma-2",
         device=device,
         model_kwargs=model_kwargs,
+        trust_remote_code=True,
         config_kwargs={"vision_config": None, "audio_config": None}
     )
 
