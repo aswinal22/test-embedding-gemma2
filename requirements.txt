@@ -5,7 +5,7 @@ accelerate>=0.28.0
 
 # Numerical & Image Processing
 torch
-numpy
+numpy<2
 pillow
 
 # Benchmarking & Display
