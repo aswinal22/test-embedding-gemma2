@@ -1,12 +1,16 @@
-# Core Deep Learning & Embeddings
+# Core runtime for EmbeddingGemma 2 lessons.
+#
+# Version floors, not just "latest":
+#   - sentence-transformers >= 6.1.0 is the minimum the model's own
+#     config_sentence_transformers.json declares.
+#   - transformers >= 5.18.0 is the version the published checkpoint was saved
+#     with ("transformers_version": "5.18.0.dev0" in its config.json). Older
+#     releases have no `embedding_gemma2` model type and cannot load it.
+#   - numpy is deliberately NOT pinned to <2. The old pin was a Google Colab
+#     workaround; current torch/scipy wheels all support numpy 2.x.
+torch>=2.2
 sentence-transformers>=6.1.0
-transformers>=4.49.0
+transformers>=5.18.0
+numpy>=1.24
+pillow>=9.0
 accelerate>=0.28.0
-
-# Numerical & Image Processing
-torch
-numpy<2
-pillow
-
-# Benchmarking & Display
-tabulate

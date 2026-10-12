@@ -1,0 +1,7 @@
+# Extra packages for EmbeddingGemma2_Complete_Guide.ipynb only.
+#
+# The lesson scripts in lessons/ do NOT need these -- install requirements.txt
+# if you are following the curriculum rather than the notebook.
+#
+#   pip install -r requirements.txt -r requirements-notebook.txt
+matplotlib>=3.7
