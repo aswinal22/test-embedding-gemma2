@@ -84,13 +84,22 @@ NO_AUDIO = {"audio_config": None}
 NO_VISION = {"vision_config": None}
 FULL_MULTIMODAL: dict[str, None] = {}
 
-#: Human-readable labels, used by the environment report.
+#: (modalities key, config_kwargs, advertised size). Used by
+#: `loader.compare_configs()` to measure the real footprint of each.
 LOAD_CONFIGS = (
-    ("Text only", TEXT_ONLY, "270M"),
-    ("Text and image", NO_AUDIO, "440M"),
-    ("Text and audio", NO_VISION, "570M"),
-    ("Full multimodal", FULL_MULTIMODAL, "740M"),
+    ("text", TEXT_ONLY, "270M"),
+    ("image", NO_AUDIO, "440M"),
+    ("audio", NO_VISION, "570M"),
+    ("full", FULL_MULTIMODAL, "740M"),
 )
+
+#: Human-readable names, matching the modalities keys above.
+LOAD_CONFIG_LABELS = {
+    "text": "Text only",
+    "image": "Text and image",
+    "audio": "Text and audio",
+    "full": "Full multimodal",
+}
 
 # --- Precision ------------------------------------------------------------
 

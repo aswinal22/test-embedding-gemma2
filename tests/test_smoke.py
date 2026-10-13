@@ -543,3 +543,83 @@ class TestPhase3Acceptance:
                             "truncate_dim without normalize_embeddings=True"
                         )
         assert not offenders, f"section 6.2 reintroduced: {offenders}"
+
+
+class TestMemoryHelpers:
+    """L10's numbers are only worth anything if these work.
+
+    Written because the Windows RSS path silently returned 0 at first: the
+    handle from GetCurrentProcess() was narrowed to 32 bits without an explicit
+    restype. A reading of zero looks like a valid number, so nothing complained.
+    """
+
+    def test_current_rss_is_plausible(self):
+        rss = eg2.current_rss_bytes()
+        if rss is None:
+            pytest.skip("platform does not expose resident set size")
+        assert rss > 5 * 1024 * 1024, f"implausibly small RSS: {rss}"
+
+    def test_rss_tracks_a_real_allocation(self):
+        from eg2 import memory
+
+        if memory.current_rss_bytes() is None:
+            pytest.skip("platform does not expose resident set size")
+
+        before = memory.current_rss_bytes()
+        ballast = bytearray(32 * 1024 * 1024)
+        # A large allocation is reserved but not committed until written to,
+        # so its pages enter the working set only once touched.
+        for offset in range(0, len(ballast), 4096):
+            ballast[offset] = 1
+        after = memory.current_rss_bytes()
+        del ballast
+
+        assert (after - before) > 16 * 1024 * 1024, "RSS did not move after committing 32 MiB"
+
+    def test_format_bytes_never_invents_a_number(self):
+        assert eg2.format_bytes(None) == "unknown"
+
+    def test_format_bytes(self):
+        assert eg2.format_bytes(0) == "0 B"
+        assert eg2.format_bytes(512) == "512 B"
+        assert eg2.format_bytes(1536) == "1.5 KiB"
+        assert eg2.format_bytes(1536 * 1024) == "1.5 MiB"
+
+    def test_parameter_count_of_a_tiny_model(self):
+        torch = pytest.importorskip("torch")
+        # 4 inputs x 3 outputs weights, plus 3 biases
+        assert eg2.parameter_count(torch.nn.Linear(4, 3)) == 15
+
+    def test_empty_cache_is_safe_without_torch(self):
+        eg2.empty_cache()
+
+
+class TestModularLoadingConfig:
+    def test_load_configs_cover_every_modality(self):
+        keys = [modalities for modalities, _, _ in eg2.LOAD_CONFIGS]
+        assert keys == ["text", "image", "audio", "full"]
+
+    def test_every_config_has_a_label(self):
+        for modalities, _, advertised in eg2.LOAD_CONFIGS:
+            assert modalities in eg2.LOAD_CONFIG_LABELS
+            assert advertised.endswith("M")
+
+    def test_config_sizes_increase_with_encoders(self):
+        sizes = [int(advertised.rstrip("M")) for _, _, advertised in eg2.LOAD_CONFIGS]
+        assert sizes == sorted(sizes)
+        assert sizes[0] == 270 and sizes[-1] == 740
+
+    def test_text_only_disables_both_encoders(self):
+        text_config = dict(eg2.LOAD_CONFIGS[0][1])
+        assert text_config == {"vision_config": None, "audio_config": None}
+
+
+class TestReadmeCorrection:
+    def test_readme_no_longer_claims_191mb(self):
+        """L10 replaces a wrong number; keep it from coming back."""
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        assert "191MB" not in readme
+        assert "191 MB" not in readme
+        assert "191MB" not in (ROOT / "docs" / "08-modular-encoders.md").read_text(encoding="utf-8").replace(
+            '"~191MB"', ""
+        )

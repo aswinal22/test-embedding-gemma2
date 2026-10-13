@@ -36,6 +36,7 @@ _EXPORTS = {
     "NO_VISION": "eg2.config",
     "FULL_MULTIMODAL": "eg2.config",
     "LOAD_CONFIGS": "eg2.config",
+    "LOAD_CONFIG_LABELS": "eg2.config",
     "MIN_TRANSFORMERS": "eg2.config",
     "MIN_SENTENCE_TRANSFORMERS": "eg2.config",
     "MIN_TORCH": "eg2.config",
@@ -76,9 +77,16 @@ _EXPORTS = {
     "topk_indices": "eg2.stats",
     "storage_bytes": "eg2.stats",
     "storage_report": "eg2.stats",
+    # memory
+    "current_rss_bytes": "eg2.memory",
+    "format_bytes": "eg2.memory",
+    "parameter_count": "eg2.memory",
     # loader
     "load_model": "eg2.loader",
     "describe_hardware": "eg2.loader",
+    "compare_configs": "eg2.loader",
+    "show_config_comparison": "eg2.loader",
+    "empty_cache": "eg2.loader",
     "resolve_precision": "eg2.loader",
     "precision_label": "eg2.loader",
     "model_cache_path": "eg2.loader",
@@ -93,6 +101,7 @@ if TYPE_CHECKING:  # pragma: no cover - import-time hints for type checkers only
     from .config import (
         CONTEXT_TOKENS,
         FULL_MULTIMODAL,
+        LOAD_CONFIG_LABELS,
         LOAD_CONFIGS,
         MRL_DIMS,
         MODEL_ID,
@@ -117,12 +126,16 @@ if TYPE_CHECKING:  # pragma: no cover - import-time hints for type checkers only
         resolve_prompt,
     )
     from .loader import (
+        compare_configs,
         describe_hardware,
+        empty_cache,
         load_model,
         model_cache_path,
         precision_label,
         resolve_precision,
+        show_config_comparison,
     )
+    from .memory import current_rss_bytes, format_bytes, parameter_count
     from .similarity import (
         cosine,
         cosine_matrix,

@@ -186,6 +186,138 @@ def load_model(
     return SentenceTransformer(**kwargs)
 
 
+def empty_cache() -> None:
+    """Release cached GPU memory, if there is a GPU.
+
+    Public because lessons need it between loads, and there is no reason for
+    them to reach into private names.
+    """
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
+def compare_configs(
+    model_id: str = MODEL_ID,
+    precision: str | None = None,
+    verbose: bool = True,
+) -> list[dict]:
+    """Load every encoder combination in turn and measure what it actually costs.
+
+    This exists to replace guesswork with numbers. An earlier version of this
+    repo's README claimed the 270M text backbone was "~191MB"; arithmetic says
+    otherwise. 270M parameters at two bytes each is 540 million bytes, and no
+    framing changes that.
+
+    Parameters are freed between runs, so peak memory is bounded by the largest
+    single config rather than the sum of all four.
+
+    Returns:
+        One dict per config with modalities, label, advertised, params, dtype,
+        expected_bytes, rss_delta_bytes.
+    """
+    import gc
+
+    from . import memory
+    from .config import LOAD_CONFIG_LABELS, LOAD_CONFIGS
+
+    results: list[dict] = []
+    dtype = resolve_precision(precision)
+    itemsize = 2 if "bfloat16" in str(dtype) else 4
+
+    for modalities, config_kwargs, advertised in LOAD_CONFIGS:
+        gc.collect()
+        empty_cache()
+        baseline = memory.current_rss_bytes()
+
+        model = None
+        try:
+            model = load_model(
+                modalities=modalities,
+                precision=precision,
+                model_id=model_id,
+                verbose=False,
+            )
+            params = memory.parameter_count(model)
+            after = memory.current_rss_bytes()
+            results.append(
+                {
+                    "modalities": modalities,
+                    "label": LOAD_CONFIG_LABELS[modalities],
+                    "config_kwargs": config_kwargs,
+                    "advertised": advertised,
+                    "params": params,
+                    "params_millions": round(params / 1_000_000) if params else None,
+                    "dtype": precision_label(dtype),
+                    "expected_bytes": params * itemsize if params else None,
+                    "rss_delta_bytes": (
+                        after - baseline if (after is not None and baseline is not None) else None
+                    ),
+                }
+            )
+        except Exception as exc:
+            # Keep going: one failing config should not hide the other three.
+            results.append(
+                {
+                    "modalities": modalities,
+                    "label": LOAD_CONFIG_LABELS[modalities],
+                    "config_kwargs": config_kwargs,
+                    "advertised": advertised,
+                    "params": 0,
+                    "params_millions": None,
+                    "dtype": precision_label(dtype),
+                    "expected_bytes": None,
+                    "rss_delta_bytes": None,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            )
+        finally:
+            del model
+            gc.collect()
+            empty_cache()
+
+    if verbose:
+        show_config_comparison(results)
+
+    return results
+
+
+def show_config_comparison(results: list[dict]) -> None:
+    """Print a compare_configs() result table."""
+    from . import memory
+
+    output.section("Measured cost of each encoder configuration")
+    print()
+
+    rows = [
+        [
+            row["label"],
+            row["config_kwargs"] or "{}",
+            row.get("params_millions") or "?",
+            row["dtype"],
+            memory.format_bytes(row["expected_bytes"]),
+            memory.format_bytes(row["rss_delta_bytes"]),
+        ]
+        for row in results
+    ]
+
+    output.table(
+        ["Configuration", "config_kwargs", "Params (M)", "dtype", "Weights", "RSS delta"],
+        rows,
+    )
+
+    if memory.is_peak_measurement():
+        output.note("On macOS these are PEAK readings, not instantaneous ones.")
+
+    for row in results:
+        if row.get("error"):
+            output.warn(f"{row['label']}: {row['error']}")
+
+
 def model_cache_path(model_id: str = MODEL_ID):
     """Where this model is cached on disk, or None if we cannot tell."""
     try:

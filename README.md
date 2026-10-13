@@ -20,12 +20,12 @@ Complete interactive test suite and conceptual guide for **EmbeddingGemma 2**, G
 |---|---|
 | **Base Model** | Gemma 4 Architecture |
 | **Total Parameters** | **740 Million** (Modular design) |
-| **Text Backbone** | **~270 Million** (Can be loaded independently for ~191MB RAM footprint) |
+| **Text Backbone** | **~270 Million** — 130M transformer + 140M embedding table ([measured RAM](docs/08-modular-encoders.md)) |
 | **Vision Encoder** | **~170 Million** (Processes images & video frames) |
 | **Audio Encoder** | **~300 Million** (Processes audio waveforms & speech) |
 | **Embedding Dimension** | **768 Dimensions** (Unified shared vector space) |
 | **Context Length** | **8,192 Tokens** |
-| **Matryoshka Slicing** | **768d, 512d, 256d, 128d** |
+| **Matryoshka Slicing** | **768d, 512d, 256d, 128d** — always with `normalize_embeddings=True` ([why](docs/07-matryoshka-explained.md)) |
 | **License** | **Apache 2.0** (Open commercial, ungated on Hugging Face) |
 
 ---
