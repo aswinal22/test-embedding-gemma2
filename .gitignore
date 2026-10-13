@@ -13,13 +13,8 @@ ENV/
 *.egg-info/
 build/
 dist/
-.pytest_cache/
 .ruff_cache/
 .mypy_cache/
-
-# Test and coverage artefacts
-.coverage
-htmlcov/
 
 # Logs
 *.log

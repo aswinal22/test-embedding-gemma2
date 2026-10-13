@@ -100,7 +100,6 @@ test-embedding-gemma2/
 │   └── 09-vector-search-in-practice.md
 │
 ├── exercises/                       ← 5 practice problems with solutions in README
-├── tests/                           ← smoke tests (no model needed) + slow model tests
 │
 ├── 01_quickstart_text.py            ← KEPT, bug-fixed, header points at L03
 ├── 02_task_prompts_search.py        ← KEPT, bug-fixed, header points at L06
@@ -184,7 +183,7 @@ Present in all 5 scripts and 3 notebook cells. The Hub repo has **no Python file
 - Mermaid labels 128d "Ultra Lightweight" with no quality caveat. Model card: 128d degrades multimodal quality substantially (MMEB overall 59.01 → 45.65).
 - Notebook cell 6 loads a second full model without freeing the first — OOM risk on Colab. Add `del text_model; torch.cuda.empty_cache()`.
 - `interactive_explorer.py:120` keyword-sniffs `"sort"`/`"dict"` to guess code intent; misfires. Replace with explicit `code <query>` / `search <query>`.
-- `.gitignore` missing `sample_*.png` (written into CWD by `04_multimodal_image.py:67`), `*.log`, `.pytest_cache/`, `.ruff_cache/`.
+- `.gitignore` missing `sample_*.png` (written into CWD by `04_multimodal_image.py:67`), `*.log`, `.ruff_cache/`.
 - No `LICENSE` despite the README's Apache-2.0 headline.
 
 ---
@@ -294,17 +293,28 @@ You asked specifically for *all the architecture*. These are the concepts curren
 
 ---
 
-## 10. Testing Strategy
+## 10. Testing Strategy — DROPPED
 
-| Type | Scope | Needs model? | Purpose |
-|---|---|---|---|
-| `tests/test_smoke.py` | Pure Python — `cosine()`, `format_document()`, `rank()`, `spearman()` | No | Fast, runs in CI in seconds |
-| `tests/test_contract.py` | Prompt names resolve; `MODEL_ID` exists; versions satisfy `MIN_*` | No (mock) | Catches §6.3 regressions |
-| `tests/test_model_slow.py` | Embedding shape `(n, 768)`; norms unit-length after `normalize_embeddings=True` | Yes | Catches §6.2 regressions |
+**Status: not implemented, by decision.** This project is for personal study.
+Automated tests were written for Phases 0–5 and then deliberately removed along
+with the local dev caches, so the repository stays small and focused on the
+lessons. Errors will be found and fixed by running the lessons directly on
+Google Colab.
 
-`tests/test_model_slow.py` is marked `@pytest.mark.slow` and excluded from the default run, so a beginner isn't forced to download 3 GB to verify their setup.
+What that gives up, stated plainly so it is a known trade-off rather than a
+surprise:
 
-**CI:** a single GitHub Actions job running the non-slow tests on CPU. Cheap, and it stops §6-class regressions from ever landing again.
+| Regression guard | Consequence if reintroduced |
+|---|---|
+| §6.1 double-prefix | The bug returns silently in any new script |
+| §6.2 truncation normalisation | Wrong rankings under inner-product scoring |
+| §6.3 dependency floors | `pip install` produces an environment that cannot load the model |
+
+All three are documented in `docs/` and taught in lessons L04 and L08, so the
+knowledge survives even though the automated check does not. If a future
+contributor wants the guards back, they are straightforward to reinstate.
+
+**Verification approach now:** run each lesson on Colab and read its output.
 
 ---
 
@@ -319,7 +329,7 @@ You asked specifically for *all the architecture*. These are the concepts curren
 | 4 | L09–L10; `docs/05`, `08` | **M** | 2 |
 | 5 | L11–L14; `docs/10` | **L** | 1 |
 | 6 | L15; `docs/09` | **S** | 3 |
-| 7 | `README.md`, `START_HERE.md`, `LICENSE`, CI, notebooks, exercises | **M** | all |
+| 7 | `README.md`, `START_HERE.md`, `LICENSE`, notebooks, exercises | **M** | all |
 
 Phases 1–6 are **independently shippable**. Phase 0 + 1 alone already satisfy most of §2.
 
@@ -334,8 +344,7 @@ Phases 1–6 are **independently shippable**. Phase 0 + 1 alone already satisfy 
 - [ ] Both critical bugs (§6.1, §6.2) fixed **and** taught as "Break it on purpose" demos
 - [ ] All 5 original scripts still run, bug-fixed, each linking to its lesson
 - [ ] `docs/` complete; every glossary term defined at first use
-- [ ] Non-slow tests pass in CI
-- [ ] No new required dependencies (B11)
+- [x] No new required dependencies (B11)
 - [ ] A beginner who has never seen an embedding can go `START_HERE.md` → L15 without asking a question
 
 ---

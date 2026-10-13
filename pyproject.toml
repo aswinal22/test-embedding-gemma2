@@ -22,12 +22,3 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.pytest.ini_options]
-# tests/test_model_slow.py downloads a ~1.5 GB checkpoint. Exclude it by default
-# so that `pytest` stays fast enough to run before every lesson.
-addopts = "-m 'not slow'"
-testpaths = ["tests"]
-markers = [
-    "slow: requires the EmbeddingGemma 2 checkpoint to be downloaded",
-]
