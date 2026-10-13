@@ -75,12 +75,22 @@ _EXPORTS = {
     "spearman": "eg2.stats",
     "topk_overlap": "eg2.stats",
     "topk_indices": "eg2.stats",
+    "top1_accuracy": "eg2.stats",
     "storage_bytes": "eg2.stats",
     "storage_report": "eg2.stats",
     # memory
     "current_rss_bytes": "eg2.memory",
     "format_bytes": "eg2.memory",
     "parameter_count": "eg2.memory",
+    # multimodal
+    "interleave": "eg2.multimodal",
+    "draw_image": "eg2.multimodal",
+    "save_images": "eg2.multimodal",
+    "budget_for": "eg2.multimodal",
+    "write_tone_wav": "eg2.multimodal",
+    "write_chord_wav": "eg2.multimodal",
+    "audio_requirements": "eg2.multimodal",
+    "PLACEHOLDERS": "eg2.multimodal",
     # loader
     "load_model": "eg2.loader",
     "describe_hardware": "eg2.loader",
@@ -157,6 +167,7 @@ if TYPE_CHECKING:  # pragma: no cover - import-time hints for type checkers only
         storage_report,
         topk_indices,
         topk_overlap,
+        top1_accuracy,
         vector_norm,
     )
     from .tokenization import (

@@ -172,6 +172,19 @@ def topk_indices(scores: Sequence[float], k: int = 3) -> list[int]:
     return sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
 
 
+def top1_accuracy(predicted: Sequence[int], expected: Sequence[int]) -> float:
+    """Fraction of queries whose top-ranked result was the expected one.
+
+    The bluntest retrieval metric, and the one to reach for first: if top-1 is
+    wrong, nothing about the rest of the ranking matters. Lesson L14 uses it to
+    measure cross-lingual retrieval per language.
+    """
+    if not predicted or len(predicted) != len(expected):
+        return 0.0
+    hits = sum(1 for p, e in zip(predicted, expected) if p == e)
+    return hits / len(predicted)
+
+
 def storage_bytes(dim: int, count: int, bytes_per_value: int = 4) -> int:
     """Bytes needed to store `count` vectors of width `dim` at a given precision.
 

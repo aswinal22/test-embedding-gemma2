@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 import eg2  # noqa: E402
-from eg2 import config, loader, output, stats  # noqa: E402
+from eg2 import config, loader, multimodal, output, stats  # noqa: E402
 
 
 class TestVersionParsing:
@@ -145,8 +145,16 @@ class TestLessonsCompile:
         sorted(p.name for p in (ROOT / "lessons").glob("L*.py")),
     )
     def test_lesson_is_valid_python(self, lesson):
+        import warnings
+
         source = (ROOT / "lessons" / lesson).read_text(encoding="utf-8")
-        compile(source, lesson, "exec")
+        # Invalid escape sequences are DeprecationWarning today and SyntaxWarning
+        # in a future Python. Docstrings full of ASCII tables trip them, so treat
+        # them as errors here rather than discovering them on a newer runtime.
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            warnings.simplefilter("error", SyntaxWarning)
+            compile(source, lesson, "exec")
 
 
 class TestCosine:
@@ -623,3 +631,167 @@ class TestReadmeCorrection:
         assert "191MB" not in (ROOT / "docs" / "08-modular-encoders.md").read_text(encoding="utf-8").replace(
             '"~191MB"', ""
         )
+
+
+class TestTop1Accuracy:
+    """Backs the Phase 5 acceptance criterion (L14 cross-lingual)."""
+
+    def test_perfect(self):
+        assert eg2.top1_accuracy([0, 1, 2], [0, 1, 2]) == 1.0
+
+    def test_half(self):
+        assert eg2.top1_accuracy([0, 9, 2], [0, 1, 2]) == pytest.approx(2 / 3)
+
+    def test_zero(self):
+        assert eg2.top1_accuracy([5, 6], [0, 1]) == 0.0
+
+    def test_empty_is_safe(self):
+        assert eg2.top1_accuracy([], []) == 0.0
+
+    def test_length_mismatch_is_safe(self):
+        assert eg2.top1_accuracy([0, 1], [0, 1, 2]) == 0.0
+
+
+class TestMultimodalHelpers:
+    """Placeholder syntax and token budgets. No model needed."""
+
+    def test_placeholders_are_the_documented_tokens(self):
+        assert multimodal.PLACEHOLDERS == {
+            "image": "<|image|>",
+            "video": "<|video|>",
+            "audio": "<|audio|>",
+        }
+
+    def test_interleave_preserves_order(self):
+        built = multimodal.interleave([("Shoes.", "text"), ("<|image|>", "image"), ("Grip:", "text")])
+        assert built == "Shoes. <|image|> Grip:"
+
+    def test_interleave_repeats_for_multiple_media(self):
+        built = multimodal.interleave(
+            [("A", "text"), ("<|image|>", "image"), ("B", "text"), ("<|image|>", "image")]
+        )
+        assert built.count("<|image|>") == 2
+        # Order matters: the placeholders must fall between the text segments.
+        assert built.index("A") < built.index("<|image|>") < built.index("B")
+
+    def test_interleave_rejects_unknown_modality(self):
+        with pytest.raises(ValueError, match="Unknown modality"):
+            multimodal.interleave([("x", "telepathy")])
+
+    def test_token_costs_match_the_model_card(self):
+        assert multimodal.TOKENS_PER_IMAGE == 280
+        assert multimodal.TOKENS_PER_VIDEO_FRAME == 140
+        assert multimodal.TOKENS_PER_AUDIO_SECOND == 25
+        assert multimodal.CONTEXT_TOKENS == 8_192
+
+    def test_budget_for_single_image(self):
+        total, percent = multimodal.budget_for({"image": 1})
+        assert total == 280
+        assert percent == pytest.approx(280 / 8192 * 100)
+
+    def test_budget_for_audio(self):
+        total, _ = multimodal.budget_for({"audio": 4})
+        assert total == 100
+
+    def test_budget_accumulates_across_modalities(self):
+        total, _ = multimodal.budget_for({"text_tokens": 30, "image": 2, "video": 10, "audio": 5})
+        assert total == 30 + 560 + 1400 + 125
+
+    def test_nineteen_images_fit_but_thirty_do_not(self):
+        """Confirms the model card's ~29 images figure."""
+        fits, _ = multimodal.budget_for({"image": 29})
+        overflows, _ = multimodal.budget_for({"image": 30})
+        assert fits <= multimodal.CONTEXT_TOKENS
+        assert overflows > multimodal.CONTEXT_TOKENS
+
+    def test_audio_requirements_returns_a_tuple(self):
+        ok, missing = multimodal.audio_requirements()
+        assert isinstance(ok, bool)
+        assert isinstance(missing, list)
+
+    def test_ffmpeg_check_does_not_raise(self):
+        assert isinstance(multimodal.ffmpeg_available(), bool)
+
+
+class TestSyntheticMedia:
+    def test_draw_image_returns_an_image(self):
+        pytest.importorskip("PIL")
+        from PIL import Image
+
+        for kind in ("sunflower", "pizza", "forest"):
+            assert isinstance(multimodal.draw_image(kind), Image.Image)
+
+    def test_draw_image_rejects_unknown_kind(self):
+        pytest.importorskip("PIL")
+        with pytest.raises(ValueError, match="Unknown image kind"):
+            multimodal.draw_image("a photograph of my cat")
+
+    def test_written_wav_is_mono_16k(self, tmp_path):
+        import wave as wavemod
+
+        path = multimodal.write_tone_wav(str(tmp_path / "tone.wav"), seconds=0.5)
+        with wavemod.open(path) as handle:
+            assert handle.getframerate() == 16_000
+            assert handle.getnchannels() == 1
+            assert handle.getnframes() > 0
+
+
+class TestPhase5Acceptance:
+    """PLAN.md Phase 5: L14 must cover at least 3 cross-lingual pairs."""
+
+    def _lesson(self, name: str) -> str:
+        return (ROOT / "lessons" / name).read_text(encoding="utf-8")
+
+    def test_l14_uses_an_english_only_index(self):
+        """Cross-lingual means the corpus is monolingual and queries are not."""
+        l14 = self._lesson("L14_cross_lingual.py")
+        assert "DOCUMENTS" in l14
+        assert "CROSS_LINGUAL" in l14
+        # Documents must be English only.
+        assert '("English"' in l14
+
+    def test_l14_covers_at_least_three_languages(self):
+        l14 = self._lesson("L14_cross_lingual.py")
+        namespace: dict = {}
+        tree = ast.parse(l14)
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id in {"QUERIES", "DOCUMENTS"} for t in node.targets
+            ):
+                exec(compile(ast.Module(body=[node], type_ignores=[]), "L14", "exec"), namespace)
+
+        queries = namespace["QUERIES"]
+        languages = {language for language, _, _ in queries}
+        cross = [q for q in queries if q[0] != "English"]
+
+        assert len(cross) >= 3, f"only {len(cross)} cross-lingual queries"
+        assert len(languages) >= 4, f"only {len(languages)} languages: {languages}"
+
+    def test_l14_every_query_targets_a_valid_document(self):
+        l14 = self._lesson("L14_cross_lingual.py")
+        namespace: dict = {}
+        tree = ast.parse(l14)
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id in {"QUERIES", "DOCUMENTS"} for t in node.targets
+            ):
+                exec(compile(ast.Module(body=[node], type_ignores=[]), "L14", "exec"), namespace)
+
+        documents = namespace["DOCUMENTS"]
+        for language, text, target in namespace["QUERIES"]:
+            assert 0 <= target < len(documents), f"{language} targets index {target}"
+            assert text.strip(), f"{language} query is empty"
+
+    def test_all_four_modalities_have_a_lesson(self):
+        """The README advertised audio and video with zero demos. Now covered."""
+        assert (ROOT / "lessons" / "L11_multimodal_image.py").exists()
+        assert (ROOT / "lessons" / "L12_interleaved_multimodal.py").exists()
+        assert (ROOT / "lessons" / "L13_audio_and_video.py").exists()
+
+    def test_l13_skips_rather_than_fails_on_missing_audio(self):
+        """An optional modality must never crash a lesson."""
+        l13 = self._lesson("L13_audio_and_video.py")
+        assert "audio_requirements" in l13
+        assert "if not audio_ok" in l13
+        # The arithmetic section must run regardless.
+        assert "budget_for" in l13
