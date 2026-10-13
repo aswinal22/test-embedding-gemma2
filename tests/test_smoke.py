@@ -353,3 +353,89 @@ class TestStats:
 
     def test_best_separating_dimension_handles_empty(self):
         assert eg2.column_means([]) == []
+
+
+class TestRankWithFamilies:
+    """Backs the Phase 2 acceptance criterion (L07 measures prefix steering)."""
+
+    def _setup(self):
+        code = [[1.0, 0.0], [0.9, 0.1]]
+        prose = [[0.0, 1.0], [0.1, 0.9]]
+        return code + prose, ["CODE", "CODE", "PROSE", "PROSE"]
+
+    def test_reports_best_score_per_family(self):
+        vectors, families = self._setup()
+        result = eg2.rank_with_families([1.0, 0.0], vectors, families)
+
+        # Computed rather than hardcoded: cos([1,0], [0,1]) = 0.0 and
+        # cos([1,0], [0.1,0.9]) = 0.1104, so the PROSE best is 0.1104.
+        assert result["best_per_family"]["CODE"] == pytest.approx(1.0)
+        assert result["best_per_family"]["PROSE"] == pytest.approx(eg2.cosine([1.0, 0.0], [0.1, 0.9]))
+        assert result["best_family"] == "CODE"
+
+    def test_margin_sign_flips_with_query_direction(self):
+        """The whole point of L07: the winner depends on which way you point."""
+        vectors, families = self._setup()
+
+        toward_code = eg2.rank_with_families([1.0, 0.0], vectors, families)
+        toward_prose = eg2.rank_with_families([0.0, 1.0], vectors, families)
+
+        code_margin = toward_code["best_per_family"]["CODE"] - toward_code["best_per_family"]["PROSE"]
+        prose_margin = toward_prose["best_per_family"]["PROSE"] - toward_prose["best_per_family"]["CODE"]
+
+        assert code_margin > 0
+        assert prose_margin > 0
+        assert toward_code["best_family"] == "CODE"
+        assert toward_prose["best_family"] == "PROSE"
+
+    def test_scores_cover_every_document(self):
+        vectors, families = self._setup()
+        result = eg2.rank_with_families([1.0, 0.0], vectors, families)
+        assert len(result["scores"]) == len(vectors)
+
+    def test_rank_orders_best_first(self):
+        vectors, families = self._setup()
+        result = eg2.rank_with_families([1.0, 0.0], vectors, families, k=2)
+        ranked = result["ranked"]
+        assert ranked[0][1] >= ranked[1][1]
+
+
+class TestTokenizationHelpers:
+    """These need a real tokenizer, so they are marked slow."""
+
+    @pytest.mark.slow
+    def test_token_counts_are_positive(self):
+        tokenization = pytest.importorskip("eg2.tokenization")
+        tokenizer = tokenization.load_tokenizer()
+        assert tokenization.count_tokens(tokenizer, "hello world") > 0
+        assert tokenization.count_tokens(tokenizer, "") == 0
+
+    @pytest.mark.slow
+    def test_context_fraction_is_bounded(self):
+        tokenization = pytest.importorskip("eg2.tokenization")
+        tokenizer = tokenization.load_tokenizer()
+        used, fraction = tokenization.fit_to_context(tokenizer, "short text")
+        assert used > 0
+        assert 0.0 < fraction < 1.0
+
+    @pytest.mark.slow
+    def test_show_tokens_returns_pairs(self):
+        tokenization = pytest.importorskip("eg2.tokenization")
+        tokenizer = tokenization.load_tokenizer()
+        pairs = tokenization.show_tokens(tokenizer, "reverse a list", show=False)
+        assert pairs and all(isinstance(t, str) and isinstance(i, int) for t, i in pairs)
+
+
+class TestPhase2Acceptance:
+    """PLAN.md Phase 2: L07 must print a measurable delta for all three choices."""
+
+    def test_l07_covers_all_three_prefix_choices(self):
+        l07 = (ROOT / "lessons" / "L07_prefix_matters.py").read_text(encoding="utf-8")
+        for label in ("CodeRetrieval", "SearchQuery", "(none)"):
+            assert label in l07, f"L07 missing prefix choice {label}"
+
+    def test_l07_compares_against_a_mixed_corpus(self):
+        """A same-family corpus could not show steering."""
+        l07 = (ROOT / "lessons" / "L07_prefix_matters.py").read_text(encoding="utf-8")
+        assert "CODE_DOCS" in l07 and "PROSE_DOCS" in l07
+        assert len(eg2.PROMPTS) >= 8, "prompt table should cover the documented names"

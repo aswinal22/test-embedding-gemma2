@@ -54,8 +54,15 @@ _EXPORTS = {
     "cosine_matrix": "eg2.similarity",
     "similarity_matrix": "eg2.similarity",
     "rank": "eg2.similarity",
+    "rank_with_families": "eg2.similarity",
     "show_ranking": "eg2.similarity",
     "show_similarity_matrix": "eg2.similarity",
+    # tokenization
+    "load_tokenizer": "eg2.tokenization",
+    "count_tokens": "eg2.tokenization",
+    "show_tokens": "eg2.tokenization",
+    "context_report": "eg2.tokenization",
+    "fit_to_context": "eg2.tokenization",
     # stats
     "vector_norm": "eg2.stats",
     "dot_product": "eg2.stats",
@@ -112,11 +119,19 @@ if TYPE_CHECKING:  # pragma: no cover - import-time hints for type checkers only
         cosine,
         cosine_matrix,
         rank,
+        rank_with_families,
         show_ranking,
         show_similarity_matrix,
         similarity_matrix,
     )
     from .stats import column_means, dot_product, vector_norm
+    from .tokenization import (
+        context_report,
+        count_tokens,
+        fit_to_context,
+        load_tokenizer,
+        show_tokens,
+    )
 
 
 def __getattr__(name: str):

@@ -91,6 +91,41 @@ def rank(
     return results
 
 
+def rank_with_families(
+    query_embedding: Sequence[float],
+    document_embeddings: Sequence[Sequence[float]],
+    families: Sequence[str],
+    k: int = 1,
+) -> dict:
+    """Rank documents and report the best score within each family.
+
+    Useful when the question is not "which document won" but "did the ranking
+    respect the kind of content I expected". Lesson L07 uses it to show whether
+    a prefix steered results toward code or toward prose.
+
+    Returns a dict with keys: ranked, best_per_family, best_family.
+    """
+    scores = [cosine(query_embedding, doc) for doc in document_embeddings]
+    order = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+
+    best_per_family: dict[str, float] = {}
+    best_per_family_index: dict[str, int] = {}
+    for index, score in enumerate(scores):
+        family = families[index]
+        if family not in best_per_family or score > best_per_family[family]:
+            best_per_family[family] = score
+            best_per_family_index[family] = index
+
+    top_index = order[0]
+    return {
+        "ranked": [(i, scores[i]) for i in order[:k]],
+        "scores": scores,
+        "best_per_family": best_per_family,
+        "best_per_family_index": best_per_family_index,
+        "best_family": families[top_index],
+    }
+
+
 def show_ranking(results: Sequence[dict]) -> None:
     """Print ranked results in the format every lesson uses."""
     output.table(
