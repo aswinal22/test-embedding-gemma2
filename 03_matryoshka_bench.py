@@ -17,12 +17,16 @@ Benefits:
 Known issues being addressed in later phases of PLAN.md:
   - Documents below are pre-formatted with "title: X | text: Y", so they must
     NOT also pass prompt_name="Document" (see lessons/L04).
-  - The 12 truncate_dim calls are missing normalize_embeddings=True, which
-    silently degrades ranking (see lessons/L08).
-  - One query and four documents is far too small a sample to support the
-    conclusion this script prints.
+  - All truncate_dim calls now pass normalize_embeddings=True, which truncation
+    requires (see lessons/L08).
+  - The mean-score-delta metric this originally reported was trivially 0.0 at
+    768d and said nothing about ranking, so top-3 overlap and rank correlation
+    replaced it.
+  - One query and four documents is still far too small a sample. The caveat is
+    printed at the end; lessons/L08_matryoshka.py repeats this properly.
 """
 
+import math
 import sys
 import time
 import torch
@@ -68,14 +72,17 @@ def main():
 
     # No prompt_name: these documents already carry "title: X | text: Y".
     # Adding prompt_name="Document" would prepend a second "title: none | text: ".
-    q_emb_768 = model.encode([query], prompt_name="SearchQuery", truncate_dim=768)
-    d_emb_768 = model.encode(documents, truncate_dim=768)
+    # normalize_embeddings=True is REQUIRED alongside truncate_dim. Truncation
+    # slices the vector but does not scale it, so the result comes back shorter
+    # than 1.0 and every score is scaled down. See lessons/L08_matryoshka.py.
+    q_emb_768 = model.encode([query], prompt_name="SearchQuery", truncate_dim=768, normalize_embeddings=True)
+    d_emb_768 = model.encode(documents, truncate_dim=768, normalize_embeddings=True)
     baseline_scores = model.similarity(q_emb_768, d_emb_768).cpu().numpy()[0]
 
     for dim in dimensions:
         t0 = time.perf_counter()
-        q_emb = model.encode([query], prompt_name="SearchQuery", truncate_dim=dim)
-        d_emb = model.encode(documents, truncate_dim=dim)
+        q_emb = model.encode([query], prompt_name="SearchQuery", truncate_dim=dim, normalize_embeddings=True)
+        d_emb = model.encode(documents, truncate_dim=dim, normalize_embeddings=True)
         elapsed_ms = (time.perf_counter() - t0) * 1000
 
         scores = model.similarity(q_emb, d_emb).cpu().numpy()[0]
@@ -85,23 +92,33 @@ def main():
         # Mean absolute difference compared to 768-d baseline
         mean_diff = float(np.mean(np.abs(scores - baseline_scores)))
 
+        # Mean absolute difference is a weak metric for retrieval: it is
+        # trivially 0.0 at 768d (the baseline compared against itself) and says
+        # nothing about whether the ORDER of results survived. These two do.
+        baseline_order = list(np.argsort(baseline_scores)[::-1])
+        candidate_order = list(np.argsort(scores)[::-1])
+        top3_overlap = len(set(baseline_order[:3]) & set(candidate_order[:3])) / len(set(baseline_order[:3]) | set(candidate_order[:3]))
+        rank_correlation = _spearman(baseline_scores, scores)
+
         results[dim] = {
             "dim": dim,
             "bytes": bytes_per_vector,
             "savings_pct": savings_pct,
             "elapsed_ms": elapsed_ms,
             "scores": scores,
-            "mean_diff": mean_diff
+            "mean_diff": mean_diff,
+            "top3_overlap": top3_overlap,
+            "spearman": rank_correlation
         }
 
     # Print summary table
-    print("\n" + "=" * 75)
-    print(f" {'Dimension':<10} | {'Bytes/Vec':<10} | {'Storage Savings':<16} | {'Encoding Time':<14} | {'Avg Score Delta vs 768d'}")
-    print("-" * 75)
+    print("\n" + "=" * 90)
+    print(f" {'Dim':<8} | {'Bytes/Vec':<10} | {'Savings':<12} | {'Time':<12} | {'Top-3 overlap':<14} | {'Rank corr.':<11}")
+    print("-" * 90)
     for dim in dimensions:
         r = results[dim]
-        print(f" {r['dim']:<10} | {r['bytes']} B     | {r['savings_pct']:>6.1f}% saved   | {r['elapsed_ms']:>6.1f} ms      | {r['mean_diff']:.4f}")
-    print("=" * 75)
+        print(f" {r['dim']:<8} | {r['bytes']:<10} | {r['savings_pct']:>6.1f}%     | {r['elapsed_ms']:>7.1f} ms  | {r['top3_overlap']:>10.3f}     | {r['spearman']:>7.3f}")
+    print("=" * 90)
 
     print("\n[2] Document Ranking Comparison by Dimension:")
     doc_titles = ["Representation Learning", "Vector Search Engines", "French Baguette", "Quantum Computing"]
@@ -111,9 +128,41 @@ def main():
         print(f"    - At {dim:3d}d: Top Match -> '{doc_titles[top_idx]}' (Score: {scores[top_idx]:.4f})")
 
     print("\n[3] Takeaway:")
-    print("    Even when truncating from 768 dimensions down to 256 or 128 dimensions,")
-    print("    the top semantic match remains identical, while cutting storage costs by 66% to 83%!")
-    print("=" * 75)
+    print("    Top-3 overlap and rank correlation are the metrics that matter here, not mean")
+    print("    score delta. 256d keeps ranking essentially intact at two thirds less storage.")
+    print()
+    print("    CAVEAT: this script uses ONE query against FOUR documents, which is far too")
+    print("    small a sample to support any conclusion. lessons/L08_matryoshka.py repeats")
+    print("    this properly over 24 documents and 6 queries, and shows where 128d starts")
+    print("    to degrade -- the published benchmarks have multimodal MMEB falling 59 -> 46.")
+    print("=" * 90)
+
+
+def _spearman(a, b) -> float:
+    """Rank correlation between two score lists. 1.0 means identical ordering."""
+    def ranks(values):
+        order = sorted(range(len(values)), key=lambda i: values[i], reverse=True)
+        result = [0.0] * len(values)
+        start = 0
+        while start < len(order):
+            stop = start
+            while stop + 1 < len(order) and values[order[stop + 1]] == values[order[start]]:
+                stop += 1
+            average = (start + stop) / 2.0 + 1.0
+            for position in range(start, stop + 1):
+                result[order[position]] = average
+            start = stop + 1
+        return result
+
+    x, y = ranks(list(a)), ranks(list(b))
+    n = len(x)
+    mx, my = sum(x) / n, sum(y) / n
+    num = sum((xi - mx) * (yi - my) for xi, yi in zip(x, y))
+    dx = math.sqrt(sum((xi - mx) ** 2 for xi in x))
+    dy = math.sqrt(sum((yi - my) ** 2 for yi in y))
+    if dx == 0 or dy == 0:
+        return 0.0
+    return num / (dx * dy)
 
 
 if __name__ == "__main__":

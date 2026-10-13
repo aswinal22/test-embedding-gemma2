@@ -80,3 +80,122 @@ def column_spread(matrix: Sequence[Sequence[float]]) -> list[float]:
         variance = sum((v - avg) ** 2 for v in values) / len(values)
         spreads.append(math.sqrt(variance))
     return spreads
+
+
+# --- Ranking statistics ----------------------------------------------------
+# Used by lesson L08 to answer the question that actually matters when
+# truncating an embedding: does the ORDER of results survive, not just the
+# individual scores?
+
+
+def ranks(values: Sequence[float]) -> list[float]:
+    """Convert scores to ranks, where 1 is best (highest score).
+
+    Ties share the average of the positions they span, which is the standard
+    treatment and stops tie-heavy score lists from corrupting the correlation.
+    """
+    n = len(values)
+    # Descending: the highest score must land on rank 1, matching the
+    # documented contract and how retrieval results are conventionally shown.
+    order = sorted(range(n), key=lambda i: values[i], reverse=True)
+    result = [0.0] * n
+
+    start = 0
+    while start < n:
+        stop = start
+        while stop + 1 < n and values[order[stop + 1]] == values[order[start]]:
+            stop += 1
+        # Ranks are 1-based, and the tied block spans [start, stop] 0-based.
+        average_rank = (start + stop) / 2.0 + 1.0
+        for position in range(start, stop + 1):
+            result[order[position]] = average_rank
+        start = stop + 1
+
+    return result
+
+
+def pearson(a: Sequence[float], b: Sequence[float]) -> float:
+    """Pearson correlation. Returns 0.0 when either input is constant."""
+    n = len(a)
+    if n != len(b) or n < 2:
+        return 0.0
+
+    mean_a, mean_b = mean(a), mean(b)
+    numerator = sum((x - mean_a) * (y - mean_b) for x, y in zip(a, b))
+    deviation_a = math.sqrt(sum((x - mean_a) ** 2 for x in a))
+    deviation_b = math.sqrt(sum((y - mean_b) ** 2 for y in b))
+
+    if deviation_a == 0.0 or deviation_b == 0.0:
+        return 0.0
+    return numerator / (deviation_a * deviation_b)
+
+
+def spearman(a: Sequence[float], b: Sequence[float]) -> float:
+    """Spearman rank correlation between two score lists.
+
+    1.0 means the two lists order items identically. 0.0 means no relationship.
+    Negative means the order reversed.
+
+    This is the right metric for judging truncated embeddings: retrieval cares
+    about the ORDER of results, not whether each score moved by 0.001.
+    """
+    if len(a) != len(b):
+        raise ValueError(f"Cannot correlate lists of length {len(a)} and {len(b)}")
+    if len(a) < 2:
+        return 0.0
+    return pearson(ranks(a), ranks(b))
+
+
+def topk_overlap(
+    reference: Sequence[int],
+    candidate: Sequence[int],
+    k: int = 3,
+) -> float:
+    """How much two rankings agree in their top-k, as a Jaccard overlap.
+
+    Returns a value in [0, 1]: 1.0 means identical top-k sets, 0.0 means no
+    overlap at all. Unlike "did the top-1 match", this tolerates reordering
+    within the result set, which is usually harmless.
+    """
+    reference_set = set(reference[:k])
+    candidate_set = set(candidate[:k])
+    if not reference_set and not candidate_set:
+        return 1.0
+    union = reference_set | candidate_set
+    if not union:
+        return 1.0
+    return len(reference_set & candidate_set) / len(union)
+
+
+def topk_indices(scores: Sequence[float], k: int = 3) -> list[int]:
+    """Indices of the k highest scores, best first."""
+    return sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
+
+
+def storage_bytes(dim: int, count: int, bytes_per_value: int = 4) -> int:
+    """Bytes needed to store `count` vectors of width `dim` at a given precision.
+
+    4 bytes per value is float32, which is what `encode()` returns by default.
+    """
+    return dim * bytes_per_value * count
+
+
+def storage_report(dimensions: Sequence[int], count: int = 1_000_000) -> list[dict]:
+    """Storage cost of a corpus at each truncation dimension.
+
+    Defaults to one million vectors, because that is roughly where the numbers
+    stop being hypothetical.
+    """
+    native = max(dimensions)
+    rows = []
+    for dim in dimensions:
+        total = storage_bytes(dim, count)
+        rows.append(
+            {
+                "dim": dim,
+                "bytes": total,
+                "gib": total / (1024**3),
+                "savings_pct": (1.0 - dim / native) * 100,
+            }
+        )
+    return rows

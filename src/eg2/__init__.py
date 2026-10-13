@@ -68,6 +68,14 @@ _EXPORTS = {
     "dot_product": "eg2.stats",
     "column_means": "eg2.stats",
     "best_separating_dimension": "eg2.stats",
+    "column_spread": "eg2.stats",
+    "ranks": "eg2.stats",
+    "pearson": "eg2.stats",
+    "spearman": "eg2.stats",
+    "topk_overlap": "eg2.stats",
+    "topk_indices": "eg2.stats",
+    "storage_bytes": "eg2.stats",
+    "storage_report": "eg2.stats",
     # loader
     "load_model": "eg2.loader",
     "describe_hardware": "eg2.loader",
@@ -124,7 +132,20 @@ if TYPE_CHECKING:  # pragma: no cover - import-time hints for type checkers only
         show_similarity_matrix,
         similarity_matrix,
     )
-    from .stats import column_means, dot_product, vector_norm
+    from .stats import (
+        best_separating_dimension,
+        column_means,
+        column_spread,
+        dot_product,
+        pearson,
+        ranks,
+        spearman,
+        storage_bytes,
+        storage_report,
+        topk_indices,
+        topk_overlap,
+        vector_norm,
+    )
     from .tokenization import (
         context_report,
         count_tokens,

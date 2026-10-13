@@ -83,8 +83,12 @@ def main():
 
     # No prompt_name: format_doc() already supplied the title. Passing
     # prompt_name="Document" would add a second "title: none | text: " prefix.
-    doc_embs_768 = model.encode(formatted_docs, truncate_dim=768)
-    doc_embs_256 = model.encode(formatted_docs, truncate_dim=256)
+    #
+    # normalize_embeddings=True is required with truncate_dim: truncation slices
+    # the vector without rescaling it, so scores come back short. See
+    # lessons/L08_matryoshka.py.
+    doc_embs_768 = model.encode(formatted_docs, truncate_dim=768, normalize_embeddings=True)
+    doc_embs_256 = model.encode(formatted_docs, truncate_dim=256, normalize_embeddings=True)
     print("[*] Knowledge base indexed and ready.")
     print("\nCommands:")
     print("  Type your search query (e.g., 'how to sort numbers in python' or 'coffee brewing')")
@@ -125,7 +129,7 @@ def main():
         prompt_name = "CodeRetrieval" if is_code else "SearchQuery"
 
         t0 = time.perf_counter()
-        query_emb = model.encode([user_input], prompt_name=prompt_name, truncate_dim=current_dim)
+        query_emb = model.encode([user_input], prompt_name=prompt_name, truncate_dim=current_dim, normalize_embeddings=True)
         scores = model.similarity(query_emb, active_doc_embs).cpu().numpy()[0]
         elapsed_ms = (time.perf_counter() - t0) * 1000
 

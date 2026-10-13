@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 import eg2  # noqa: E402
-from eg2 import config, loader, output  # noqa: E402
+from eg2 import config, loader, output, stats  # noqa: E402
 
 
 class TestVersionParsing:
@@ -439,3 +439,107 @@ class TestPhase2Acceptance:
         l07 = (ROOT / "lessons" / "L07_prefix_matters.py").read_text(encoding="utf-8")
         assert "CODE_DOCS" in l07 and "PROSE_DOCS" in l07
         assert len(eg2.PROMPTS) >= 8, "prompt table should cover the documented names"
+
+
+class TestRankingStats:
+    """Metrics behind lesson L08. Pure Python, so all of these run offline."""
+
+    def test_ranks_assigns_one_to_the_highest(self):
+        assert stats.ranks([10.0, 20.0, 30.0]) == [3.0, 2.0, 1.0]
+
+    def test_ranks_averages_ties(self):
+        # 9.0 takes rank 1; the tied 5.0s span ranks 2 and 3 and average to 2.5.
+        assert stats.ranks([5.0, 5.0, 9.0]) == [2.5, 2.5, 1.0]
+
+    def test_spearman_perfect_correlation(self):
+        assert eg2.spearman([1.0, 2.0, 3.0, 4.0], [0.1, 0.2, 0.5, 0.9]) == pytest.approx(1.0)
+
+    def test_spearman_perfect_inverse(self):
+        assert eg2.spearman([1.0, 2.0, 3.0], [3.0, 2.0, 1.0]) == pytest.approx(-1.0)
+
+    def test_spearman_ignores_magnitude(self):
+        """Rank correlation cares about order, which is the whole point."""
+        assert eg2.spearman([1.0, 2.0, 3.0], [100.0, 200.0, 300.0]) == pytest.approx(1.0)
+
+    def test_spearman_is_defined_for_degenerate_input(self):
+        assert eg2.spearman([1.0], [2.0]) == 0.0
+        assert eg2.spearman([1.0, 1.0, 1.0], [1.0, 2.0, 3.0]) == 0.0
+
+    def test_spearman_rejects_length_mismatch(self):
+        with pytest.raises(ValueError):
+            eg2.spearman([1.0], [1.0, 2.0])
+
+    def test_topk_overlap(self):
+        assert eg2.topk_overlap([0, 1, 2], [0, 1, 2], k=3) == 1.0
+        assert eg2.topk_overlap([0, 1, 2], [2, 0, 1], k=3) == 1.0  # reorder is harmless
+        assert eg2.topk_overlap([0, 1, 2], [7, 8, 9], k=3) == 0.0
+
+    def test_topk_overlap_partial_swap(self):
+        # |{0,1} n {0,1,9}| / |{0,1,2,9} u {0,1,9}| = 2/4
+        assert eg2.topk_overlap([0, 1, 2], [0, 1, 9], k=3) == pytest.approx(0.5)
+
+    def test_topk_indices_orders_best_first(self):
+        assert eg2.topk_indices([0.1, 0.9, 0.5], k=2) == [1, 2]
+
+
+class TestStorageReport:
+    def test_768d_for_one_million_vectors(self):
+        rows = eg2.storage_report([768], count=1_000_000)
+        # 768 * 4 * 1e6 bytes, expressed in GiB
+        assert rows[0]["gib"] == pytest.approx(768 * 4 * 1_000_000 / (1024**3))
+
+    def test_savings_percentages(self):
+        rows = eg2.storage_report([768, 512, 256, 128])
+        assert [r["savings_pct"] for r in rows] == pytest.approx([0.0, 33.3333, 66.6667, 83.3333], abs=0.01)
+
+    def test_storage_is_monotonically_smaller(self):
+        rows = eg2.storage_report([768, 512, 256, 128])
+        sizes = [r["bytes"] for r in rows]
+        assert sizes == sorted(sizes, reverse=True)
+
+
+class TestPhase3Acceptance:
+    """PLAN.md Phase 3: L08 must use >=20 documents and >=5 queries."""
+
+    def test_l08_corpus_and_query_counts(self):
+        l08 = (ROOT / "lessons" / "L08_matryoshka.py").read_text(encoding="utf-8")
+        namespace: dict = {}
+        # Execute only the module-level constants, not the lesson body.
+        tree = ast.parse(l08)
+        wanted = {"CORPUS", "QUERIES", "DIMENSIONS"}
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id in wanted for t in node.targets
+            ):
+                exec(compile(ast.Module(body=[node], type_ignores=[]), "L08", "exec"), namespace)
+
+        assert len(namespace["CORPUS"]) >= 20, f"corpus is {len(namespace['CORPUS'])}, need >= 20"
+        assert len(namespace["QUERIES"]) >= 5, f"queries is {len(namespace['QUERIES'])}, need >= 5"
+        assert namespace["DIMENSIONS"] == [768, 512, 256, 128]
+
+    def test_truncation_calls_are_all_normalised(self):
+        """Regression guard for PLAN.md section 6.2.
+
+        Any encode() call passing truncate_dim without normalize_embeddings=True
+        reintroduces the silent ranking bug.
+        """
+        offenders = []
+        for path in _iter_source_files():
+            for index, tree in _parsed_sources(path):
+                for node in ast.walk(tree):
+                    if not isinstance(node, ast.Call):
+                        continue
+                    func = node.func
+                    if not (isinstance(func, ast.Attribute) and func.attr == "encode"):
+                        continue
+                    keywords = {k.arg: k.value for k in node.keywords}
+                    if "truncate_dim" not in keywords:
+                        continue
+                    normalised = keywords.get("normalize_embeddings")
+                    is_true = isinstance(normalised, ast.Constant) and normalised.value is True
+                    if not is_true:
+                        offenders.append(
+                            f"{path.name} src#{index} line {node.lineno}: "
+                            "truncate_dim without normalize_embeddings=True"
+                        )
+        assert not offenders, f"section 6.2 reintroduced: {offenders}"
