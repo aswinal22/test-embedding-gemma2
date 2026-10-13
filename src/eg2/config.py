@@ -22,6 +22,46 @@ MRL_DIMS = (768, 512, 256, 128)
 #: Maximum tokens across all modalities sharing one context window.
 CONTEXT_TOKENS = 8_192
 
+# --- Task prompt prefixes -------------------------------------------------
+# Verbatim copy of the `prompts` table in the model's
+# config_sentence_transformers.json on the Hugging Face Hub.
+#
+# Why this is duplicated here rather than read from the model: lesson L04 has
+# to show you what a prompt does to your text, and it should be able to do that
+# before you have downloaded 1.5 GB of weights. tests/test_smoke.py asserts
+# this table still matches the real model (skipped if the model is absent).
+#
+# READ THIS LINE CAREFULLY -- it is the single biggest footgun in this repo:
+#   "Document" already begins with "title: none | text: "
+# So `model.encode("title: X | text: Y", prompt_name="Document")` produces
+#   "title: none | text: title: X | text: Y"
+# which is not what anyone wants. See docs/06-task-prefixes-reference.md.
+PROMPTS = {
+    "BitextMining": "task: search result | query: ",
+    "Classification": "task: classification | query: ",
+    "Clustering": "task: clustering | query: ",
+    "CodeRetrieval": "task: code retrieval | query: ",
+    "Document": "title: none | text: ",
+    "FactChecking": "task: fact checking | query: ",
+    "InstructionRetrieval": "task: code retrieval | query: ",
+    "MultilabelClassification": "task: classification | query: ",
+    "PairClassification": "task: sentence similarity | query: ",
+    "QuestionAnswering": "task: question answering | query: ",
+    "Reranking": "task: search result | query: ",
+    "Retrieval": "task: search result | query: ",
+    "Retrieval-document": "title: none | text: ",
+    "Retrieval-query": "task: search result | query: ",
+    "STS": "task: sentence similarity | query: ",
+    "SearchQuery": "task: search result | query: ",
+    "SentenceSimilarity": "task: sentence similarity | query: ",
+    "Summarization": "task: sentence similarity | query: ",
+    "document": "title: none | text: ",
+    "query": "task: search result | query: ",
+}
+
+#: Prefix used by images, video and audio. None -- media takes no prompt.
+NO_PROMPT_MODALITIES = ("image", "audio", "video")
+
 # --- Minimum supported versions -------------------------------------------
 
 MIN_PYTHON = (3, 10)

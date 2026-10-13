@@ -13,6 +13,14 @@ Benefits:
 - Massive Vector DB RAM/Disk Savings (66.7% savings at 256d, 83.3% at 128d).
 - Faster Nearest-Neighbor (ANN) Search & Lower Latency.
 - Retains over 95%+ of retrieval accuracy!
+
+Known issues being addressed in later phases of PLAN.md:
+  - Documents below are pre-formatted with "title: X | text: Y", so they must
+    NOT also pass prompt_name="Document" (see lessons/L04).
+  - The 12 truncate_dim calls are missing normalize_embeddings=True, which
+    silently degrades ranking (see lessons/L08).
+  - One query and four documents is far too small a sample to support the
+    conclusion this script prints.
 """
 
 import sys
@@ -42,7 +50,6 @@ def main():
         model_id,
         device=device,
         model_kwargs=model_kwargs,
-        trust_remote_code=True,
         config_kwargs={"vision_config": None, "audio_config": None}
     )
 
@@ -59,15 +66,16 @@ def main():
 
     print(f"\n[1] Testing query against {len(documents)} documents across MRL dimensions: {dimensions}...")
 
-    # Baseline 768-d scores
+    # No prompt_name: these documents already carry "title: X | text: Y".
+    # Adding prompt_name="Document" would prepend a second "title: none | text: ".
     q_emb_768 = model.encode([query], prompt_name="SearchQuery", truncate_dim=768)
-    d_emb_768 = model.encode(documents, prompt_name="Document", truncate_dim=768)
+    d_emb_768 = model.encode(documents, truncate_dim=768)
     baseline_scores = model.similarity(q_emb_768, d_emb_768).cpu().numpy()[0]
 
     for dim in dimensions:
         t0 = time.perf_counter()
         q_emb = model.encode([query], prompt_name="SearchQuery", truncate_dim=dim)
-        d_emb = model.encode(documents, prompt_name="Document", truncate_dim=dim)
+        d_emb = model.encode(documents, truncate_dim=dim)
         elapsed_ms = (time.perf_counter() - t0) * 1000
 
         scores = model.similarity(q_emb, d_emb).cpu().numpy()[0]

@@ -7,6 +7,9 @@ Features:
 - Live semantic search on a knowledge base of tech, code, and science topics.
 - Toggle Matryoshka dimensions (768 vs 256) on the fly.
 - Measures retrieval latency and displays similarity scores.
+
+Note: the documents below are pre-formatted with a title, so they must not also
+pass prompt_name="Document" (see lessons/L04_whats_the_prefix.py).
 """
 
 import sys
@@ -55,6 +58,7 @@ KNOWLEDGE_BASE = [
 
 
 def format_doc(title: str, text: str) -> str:
+    """Format a titled document. Encode WITHOUT prompt_name -- see L04."""
     return f"title: {title} | text: {text}"
 
 
@@ -71,16 +75,16 @@ def main():
         "google/embeddinggemma-2",
         device=device,
         model_kwargs=model_kwargs,
-        trust_remote_code=True,
         config_kwargs={"vision_config": None, "audio_config": None}
     )
 
     formatted_docs = [format_doc(d["title"], d["text"]) for d in KNOWLEDGE_BASE]
     print(f"[*] Pre-indexing {len(formatted_docs)} documents...")
 
-    # Pre-index at 768d and 256d
-    doc_embs_768 = model.encode(formatted_docs, prompt_name="Document", truncate_dim=768)
-    doc_embs_256 = model.encode(formatted_docs, prompt_name="Document", truncate_dim=256)
+    # No prompt_name: format_doc() already supplied the title. Passing
+    # prompt_name="Document" would add a second "title: none | text: " prefix.
+    doc_embs_768 = model.encode(formatted_docs, truncate_dim=768)
+    doc_embs_256 = model.encode(formatted_docs, truncate_dim=256)
     print("[*] Knowledge base indexed and ready.")
     print("\nCommands:")
     print("  Type your search query (e.g., 'how to sort numbers in python' or 'coffee brewing')")

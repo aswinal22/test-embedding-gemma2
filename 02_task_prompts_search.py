@@ -8,9 +8,15 @@ Why Task Prompts Matter:
 In real-world search and RAG systems, user queries are short and question-oriented,
 whereas documents are long and explanatory. EmbeddingGemma 2 was trained with
 asymmetric task instructions to align query intent with document answers:
-- Documents:   prompt_name="Document" (with format: 'title: {title} | text: {text}')
+- Documents:   prompt_name="Document"  (for UNTITLED body text)
 - Text Search: prompt_name="SearchQuery"
 - Code Search: prompt_name="CodeRetrieval"
+
+Title formatting rule (see lessons/L04_whats_the_prefix.py):
+    prompt_name="Document" expands to the literal string "title: none | text: ".
+    So if you format the title yourself, do NOT also pass prompt_name, or the
+    model receives "title: none | text: title: X | text: Y".
+    The docs below have titles, so they are encoded WITHOUT prompt_name.
 """
 
 import sys
@@ -26,7 +32,10 @@ except ImportError:
 
 
 def format_doc(title: str, text: str) -> str:
-    """Format document as recommended by the EmbeddingGemma 2 specification."""
+    """Format a titled document as the EmbeddingGemma 2 specification requires.
+
+    Use this and encode WITHOUT prompt_name. See lessons/L04_whats_the_prefix.py.
+    """
     t = title if title else "none"
     return f"title: {t} | text: {text}"
 
@@ -45,7 +54,6 @@ def main():
         model_id,
         device=device,
         model_kwargs=model_kwargs,
-        trust_remote_code=True,
         config_kwargs={"vision_config": None, "audio_config": None}
     )
 
@@ -75,8 +83,11 @@ def main():
 
     formatted_docs = [format_doc(d["title"], d["text"]) for d in raw_documents]
 
-    print("\n[1] Encoding Document Corpus with prompt_name='Document'...")
-    doc_embeddings = model.encode(formatted_docs, prompt_name="Document")
+    print("\n[1] Encoding Document Corpus (titles formatted manually, no prefix)...")
+    # No prompt_name here on purpose. The titles were formatted by format_doc()
+    # above, and prompt_name="Document" would prepend a second
+    # "title: none | text: " producing "title: none | text: title: X | text: Y".
+    doc_embeddings = model.encode(formatted_docs)
     print(f"    -> Encoded {len(formatted_docs)} documents into shape {doc_embeddings.shape}")
 
     # 2. Test Queries with appropriate prompt types

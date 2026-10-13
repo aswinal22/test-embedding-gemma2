@@ -13,6 +13,12 @@ This script:
 1. Creates a sample image (or loads an existing image).
 2. Encodes the image and multiple text candidate queries into the shared 768-d space.
 3. Finds the text query that best matches the image via cosine similarity.
+
+SEE ALSO
+--------
+lessons/L11_multimodal_image.py covers this step by step, and
+lessons/L12_interleaved_multimodal.py shows how to mix text and images in a
+single embedding.
 """
 
 import os
@@ -74,8 +80,7 @@ def main():
     model = SentenceTransformer(
         model_id,
         device=device,
-        model_kwargs=model_kwargs,
-        trust_remote_code=True
+        model_kwargs=model_kwargs
     )
 
     candidate_texts = [

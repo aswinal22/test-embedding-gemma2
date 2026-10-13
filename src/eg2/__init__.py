@@ -42,6 +42,25 @@ _EXPORTS = {
     "MIN_PYTHON": "eg2.config",
     "at_least": "eg2.config",
     "version_tuple": "eg2.config",
+    "PROMPTS": "eg2.config",
+    # documents
+    "format_document": "eg2.documents",
+    "encode_documents": "eg2.documents",
+    "encode_queries": "eg2.documents",
+    "preview_input": "eg2.documents",
+    "resolve_prompt": "eg2.documents",
+    # similarity
+    "cosine": "eg2.similarity",
+    "cosine_matrix": "eg2.similarity",
+    "similarity_matrix": "eg2.similarity",
+    "rank": "eg2.similarity",
+    "show_ranking": "eg2.similarity",
+    "show_similarity_matrix": "eg2.similarity",
+    # stats
+    "vector_norm": "eg2.stats",
+    "dot_product": "eg2.stats",
+    "column_means": "eg2.stats",
+    "best_separating_dimension": "eg2.stats",
     # loader
     "load_model": "eg2.loader",
     "describe_hardware": "eg2.loader",
@@ -69,11 +88,19 @@ if TYPE_CHECKING:  # pragma: no cover - import-time hints for type checkers only
         NATIVE_DIM,
         NO_AUDIO,
         NO_VISION,
+        PROMPTS,
         TEXT_ONLY,
         at_least,
         version_tuple,
     )
     from .doctor import build_report, print_report
+    from .documents import (
+        encode_documents,
+        encode_queries,
+        format_document,
+        preview_input,
+        resolve_prompt,
+    )
     from .loader import (
         describe_hardware,
         load_model,
@@ -81,6 +108,15 @@ if TYPE_CHECKING:  # pragma: no cover - import-time hints for type checkers only
         precision_label,
         resolve_precision,
     )
+    from .similarity import (
+        cosine,
+        cosine_matrix,
+        rank,
+        show_ranking,
+        show_similarity_matrix,
+        similarity_matrix,
+    )
+    from .stats import column_means, dot_product, vector_norm
 
 
 def __getattr__(name: str):

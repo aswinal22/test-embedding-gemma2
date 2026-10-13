@@ -9,6 +9,11 @@ Key concepts demonstrated:
 2. Proper precision setting (bfloat16 for GPU or float32 for CPU - NEVER float16).
 3. Generating 768-dimensional embeddings.
 4. Computing cosine similarity between sentences.
+
+SEE ALSO
+--------
+lessons/L03_similarity_matrix.py teaches cosine similarity properly, including
+why the diagonal of a similarity matrix is exactly 1.0.
 """
 
 import sys
@@ -49,7 +54,6 @@ def main():
         model_id,
         device=device,
         model_kwargs=model_kwargs,
-        trust_remote_code=True,
         config_kwargs={"vision_config": None, "audio_config": None}
     )
 
