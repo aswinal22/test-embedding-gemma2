@@ -91,6 +91,11 @@ _EXPORTS = {
     "write_chord_wav": "eg2.multimodal",
     "audio_requirements": "eg2.multimodal",
     "PLACEHOLDERS": "eg2.multimodal",
+    # corpus
+    "load_folder": "eg2.corpus",
+    "chunk_text": "eg2.corpus",
+    "index_folder": "eg2.corpus",
+    "summarise": "eg2.corpus",
     # loader
     "load_model": "eg2.loader",
     "describe_hardware": "eg2.loader",
@@ -128,6 +133,7 @@ if TYPE_CHECKING:  # pragma: no cover - import-time hints for type checkers only
         version_tuple,
     )
     from .doctor import build_report, print_report
+    from .corpus import chunk_text, index_folder, load_folder, summarise
     from .documents import (
         encode_documents,
         encode_queries,
